@@ -22,7 +22,7 @@ import java.nio.file.Files
 import scala.collection.{AbstractIterator, mutable}
 import scala.util.Random
 import scala.collection.JavaConverters._
-import ml.dmlc.xgboost4j.java.{IRabitTracker, Rabit, XGBoostError, RabitTracker => PyRabitTracker}
+import ml.dmlc.xgboost4j.java.{IRabitTracker, Rabit, XGBoostError, MyTracker}
 import ml.dmlc.xgboost4j.scala.rabit.RabitTracker
 import ml.dmlc.xgboost4j.scala.spark.params.LearningTaskParams
 import ml.dmlc.xgboost4j.scala.ExternalCheckpointManager
@@ -427,12 +427,7 @@ object XGBoost extends Serializable {
   }
 
   private def startTracker(nWorkers: Int, trackerConf: TrackerConf): IRabitTracker = {
-    val tracker: IRabitTracker = trackerConf.trackerImpl match {
-      case "scala" => new RabitTracker(nWorkers)
-      case "python" => new PyRabitTracker(nWorkers)
-      case _ => new PyRabitTracker(nWorkers)
-    }
-
+    val tracker: IRabitTracker = new MyTracker(nWorkers)
     require(tracker.start(trackerConf.workerConnectionTimeout), "FAULT: Failed to start tracker")
     tracker
   }

@@ -20,7 +20,7 @@ import org.apache.commons.logging.LogFactory;
  *
  * The tracker must be started on driver node before running distributed jobs.
  */
-public class RabitTracker implements IRabitTracker {
+public class MyTracker implements IRabitTracker {
   // Maybe per tracker logger?
   private static final Log logger = LogFactory.getLog(RabitTracker.class);
   // tracker python file.
@@ -49,7 +49,7 @@ public class RabitTracker implements IRabitTracker {
 
       Log trackerProcessLogger = LogFactory.getLog(TrackerProcessLogger.class);
       BufferedReader reader = new BufferedReader(new InputStreamReader(
-              trackerProcess.get().getErrorStream()));
+        trackerProcess.get().getErrorStream()));
       String line;
       try {
         while ((line = reader.readLine()) != null) {
@@ -57,7 +57,7 @@ public class RabitTracker implements IRabitTracker {
         }
         trackerProcess.get().waitFor();
         trackerProcessLogger.info("Tracker Process ends with exit code " +
-                trackerProcess.get().exitValue());
+          trackerProcess.get().exitValue());
       } catch (IOException ex) {
         trackerProcessLogger.error(ex.toString());
       } catch (InterruptedException ie) {
@@ -77,8 +77,8 @@ public class RabitTracker implements IRabitTracker {
     }
   }
 
-  public RabitTracker(int numWorkers)
-      throws XGBoostError {
+  public MyTracker(int numWorkers)
+    throws XGBoostError {
     if (numWorkers < 1) {
       throw new XGBoostError("numWorkers must be greater equal to one");
     }
@@ -129,7 +129,7 @@ public class RabitTracker implements IRabitTracker {
   private boolean startTrackerProcess() {
     try {
       String trackerExecString = this.addTrackerProperties("python " + tracker_py +
-          " --log-level=DEBUG --num-workers=" + String.valueOf(numWorkers));
+        " --log-level=DEBUG --num-workers=" + String.valueOf(numWorkers));
 
       trackerProcess.set(Runtime.getRuntime().exec(trackerExecString));
       loadEnvs(trackerProcess.get().getInputStream());
@@ -158,16 +158,36 @@ public class RabitTracker implements IRabitTracker {
     }
   }
 
+  void inputStreamToOutputStream(final InputStream inputStream, final OutputStream out) {
+    Thread t = new Thread(new Runnable() {
+
+      public void run() {
+        try {
+          int d;
+          while ((d = inputStream.read()) != -1) {
+            out.write(d);
+          }
+        } catch (IOException ex) {
+          //TODO make a callback on exception.
+        }
+      }
+    });
+    t.setDaemon(true);
+    t.start();
+  }
+
   public boolean start(long timeout) {
     if (timeout > 0L) {
       logger.warn("Python RabitTracker does not support timeout. " +
-              "The tracker will wait for all workers to connect indefinitely, unless " +
-              "it is interrupted manually. Use the Scala RabitTracker for timeout support.");
+        "The tracker will wait for all workers to connect indefinitely, unless " +
+        "it is interrupted manually. Use the Scala RabitTracker for timeout support.");
     }
-
     if (startTrackerProcess()) {
-      logger.debug("Tracker started, with env=" + envs.toString());
-      System.out.println("Tracker started, with env=" + envs.toString());
+      logger.debug("MyTracker started, with env=" + envs.toString());
+      System.out.println("MyTracker started, with env=" + envs.toString());
+      inputStreamToOutputStream(trackerProcess.get().getErrorStream(), System.out);
+      inputStreamToOutputStream(trackerProcess.get().getInputStream(), System.out);
+
       // also start a tracker logger
       Thread logger_thread = new Thread(new TrackerProcessLogger());
       logger_thread.setDaemon(true);
@@ -183,9 +203,9 @@ public class RabitTracker implements IRabitTracker {
   public int waitFor(long timeout) {
     if (timeout > 0L) {
       logger.warn("Python RabitTracker does not support timeout. " +
-              "The tracker will wait for either all workers to finish tasks and send " +
-              "shutdown signal, or manual interruptions. " +
-              "Use the Scala RabitTracker for timeout support.");
+        "The tracker will wait for either all workers to finish tasks and send " +
+        "shutdown signal, or manual interruptions. " +
+        "Use the Scala RabitTracker for timeout support.");
     }
 
     try {
