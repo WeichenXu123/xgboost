@@ -592,11 +592,6 @@ object XGBoost extends Serializable {
       // Train for every ${savingRound} rounds and save the partially completed booster
       val tracker = startTracker(xgbExecParams.numWorkers, xgbExecParams.trackerConf)
       val (booster, metrics) = try {
-        val parallelismTracker = new SparkParallelismTracker(sc,
-          xgbExecParams.timeoutRequestWorkers,
-          xgbExecParams.numWorkers,
-          xgbExecParams.killSparkContextOnWorkerFailure)
-
         tracker.getWorkerEnvs().putAll(xgbRabitParams)
         val rabitEnv = tracker.getWorkerEnvs
         val boostersAndMetrics = if (hasGroup) {
@@ -606,22 +601,10 @@ object XGBoost extends Serializable {
           trainForNonRanking(transformedTrainingData.right.get, xgbExecParams, rabitEnv,
             prevBooster, evalSetsMap)
         }
-        val sparkJobThread = new Thread() {
-          override def run() {
-            // force the job
-            boostersAndMetrics.foreachPartition(() => _)
-          }
-        }
-        sparkJobThread.setUncaughtExceptionHandler(tracker)
+        boostersAndMetrics.foreachPartition(() => _)
 
-        val trackerReturnVal = parallelismTracker.execute {
-          sparkJobThread.start()
-          tracker.waitFor(0L)
-        }
 
-        logger.info(s"Rabit returns with exit code $trackerReturnVal")
-        val (booster, metrics) = postTrackerReturnProcessing(trackerReturnVal,
-          boostersAndMetrics, sparkJobThread)
+        val (booster, metrics) = postTrackerReturnProcessing(boostersAndMetrics)
         (booster, metrics)
       } finally {
         tracker.stop()
@@ -725,30 +708,11 @@ object XGBoost extends Serializable {
   }
 
   private def postTrackerReturnProcessing(
-      trackerReturnVal: Int,
       distributedBoostersAndMetrics: RDD[(Booster, Map[String, Array[Float]])],
-      sparkJobThread: Thread): (Booster, Map[String, Array[Float]]) = {
-    if (trackerReturnVal == 0) {
-      // Copies of the final booster and the corresponding metrics
-      // reside in each partition of the `distributedBoostersAndMetrics`.
-      // Any of them can be used to create the model.
-      // it's safe to block here forever, as the tracker has returned successfully, and the Spark
-      // job should have finished, there is no reason for the thread cannot return
-      sparkJobThread.join()
-      val (booster, metrics) = distributedBoostersAndMetrics.first()
-      distributedBoostersAndMetrics.unpersist(false)
-      (booster, metrics)
-    } else {
-      try {
-        if (sparkJobThread.isAlive) {
-          sparkJobThread.interrupt()
-        }
-      } catch {
-        case _: InterruptedException =>
-          logger.info("spark job thread is interrupted")
-      }
-      throw new XGBoostError("XGBoostModel training failed")
-    }
+  ): (Booster, Map[String, Array[Float]]) = {
+    val (booster, metrics) = distributedBoostersAndMetrics.first()
+    distributedBoostersAndMetrics.unpersist(false)
+    (booster, metrics)
   }
 
 }
