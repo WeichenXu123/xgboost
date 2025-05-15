@@ -16,6 +16,8 @@
 
 package ml.dmlc.xgboost4j.scala.spark.params
 
+import scala.reflect.ClassTag
+
 import ml.dmlc.xgboost4j.scala.{EvalTrait, ObjectiveTrait}
 import ml.dmlc.xgboost4j.scala.spark.TrackerConf
 import ml.dmlc.xgboost4j.scala.spark.util.Utils
@@ -28,7 +30,7 @@ import org.json4s.jackson.Serialization
 /**
  * General spark parameter that includes TypeHints for (de)serialization using json4s.
  */
-class CustomGeneralParam[T: Manifest](
+class CustomGeneralParam[T: ClassTag: Manifest](
     parent: Params,
     name: String,
     doc: String) extends Param[T](parent, name, doc) {

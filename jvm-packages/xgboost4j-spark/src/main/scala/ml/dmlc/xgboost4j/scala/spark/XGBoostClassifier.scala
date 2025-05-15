@@ -17,6 +17,7 @@
 package ml.dmlc.xgboost4j.scala.spark
 
 import ml.dmlc.xgboost4j.scala.spark.params._
+import ml.dmlc.xgboost4j.scala.spark.util.DataUtils._
 import ml.dmlc.xgboost4j.scala.{Booster, DMatrix, EvalTrait, ObjectiveTrait, XGBoost => SXGBoost}
 import org.apache.hadoop.fs.Path
 
@@ -277,7 +278,6 @@ class XGBoostClassificationModel private[ml](
    * Note: The performance is not ideal, use it carefully!
    */
   override def predict(features: Vector): Double = {
-    import ml.dmlc.xgboost4j.scala.spark.util.DataUtils._
     val dm = new DMatrix(processMissingValues(
       Iterator(features.asXGB),
       $(missing),
